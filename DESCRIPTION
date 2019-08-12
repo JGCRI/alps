@@ -1,0 +1,10 @@
+Package: alps
+Title: Advanced Linear Pattern Scaling
+Version: 0.0.0.9000
+Authors@R: c(person("Robert", "Link", email = "robert.link@pnnl.gov", role = c("aut", "cre", "ard")),
+    person("Jonathan", "Huster", email='jonathan.huster@pnnl.gov', role=c('aut')))
+Description: Like linear pattern scaling, but better.
+Depends: R (>= 3.3.3)
+License: File: LICENSE
+Encoding: UTF-8
+LazyData: true
