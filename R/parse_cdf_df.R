@@ -118,6 +118,16 @@ read.general <- function(filename, len=NULL, tag=basename(filename), varname='ta
     gd
 }
 
+#' Read globally averaged data
+#'
+#' Read a time series of globally averaged data from a netCDF file.
+#'
+#' @param filename File name to read from
+#' @param len Maximum length to read
+#' @param tag Identifier for the source of this dataset
+#' @param varname Name of the variable to read
+#' @param timevar Name of the time variable
+#' @export
 read.geo.aggregate <- function(filename, len=NULL, tag=basename(filename), varname='tas',
                                timevar='time')
 {

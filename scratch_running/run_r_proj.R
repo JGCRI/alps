@@ -1,6 +1,7 @@
 library(dplyr)
 library(tidyr)
 library(rethinking)
+library(alps)
 
 #Read in Precipitation data (Not currently used)
 tempo_aggregated_pr <- read.general("data/pr_Amon_MIROC5_tempo_avg.nc", varname = "pr")

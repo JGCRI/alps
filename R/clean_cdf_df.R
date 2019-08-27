@@ -22,7 +22,7 @@
 #' @param gridded_data The globally gridded data
 #' @return A long form \code{data.frame}.
 #' @importFrom assertthat assert_that
-#' @importFrom dplyr mutate
+#' @importFrom dplyr mutate %>%
 #' @export
 #'
 
@@ -50,10 +50,28 @@ label_month <- function(monthly_df){
         return()
 }
 
-std_normalize <- function(df){
-    df %>%
-        mutate(global_value = (global_value - mean(global_value))/sd(global_value),
-               cell_value = (cell_value - mean(cell_value))/sd(cell_value)) %>%
-        return()
+#' Standardize data to zero mean and unit variance
+#'
+#' A single standardization is performed over the entire dataset, as
+#' opposed to a bunch of group-wise standardizations (e.g., with the
+#' groups being grid cells).  This preserves relationships between grid cells,
+#' making it easier to interpret coefficients.
+#'
+#' @param df A data frame of values to standardize
+#' @param stvars List of names of variables to standardize in the df
+#' @return Data frame of standardized values.  The original means and standard
+#' deviations will be added as attributes \code{means} and \code{stdevs}.
+#' @export
+std_normalize <- function(df, stvars = c('global_value', 'cell_value')) {
+
+    means <- sapply(stvars, function(var) {mean(df[[var]])})
+    stdevs <- sapply(stvars, function(var) {sd(df[[var]])})
+    names(means) <- names(stdevs) <- stvars
+    for(var in stvars) {
+        df[[var]] <- (df[[var]] - means[[var]]) / stdevs[[var]]
+    }
+    attr(df, 'means') <- means
+    attr(df, 'stdevs') <- stdevs
+    df
 }
 
