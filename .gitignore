@@ -30,3 +30,9 @@ rsconnect/
 ## Large data files
 *.nc
 
+## Mac cruft
+.DS_Store
+
+## Emacs backup files
+*~
+
