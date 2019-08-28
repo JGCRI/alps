@@ -18,26 +18,31 @@ geo_aggregated_tas <- read.geo.aggregate("data/tas_Amon_MIROC5_geo_avg.nc", varn
 temp_df_annual <- bind_geo.ave_grid(geo_tempo_aggregated_tas, tempo_aggregated_tas)
 temp_df_monthly <- bind_geo.ave_grid(geo_aggregated_tas, unaggregated_tas)
 
+ncell <- 25
 temp_df_annual %>%
-    filter(grid_cell<10) %>%
+    filter(grid_cell<ncell) %>%
     std_normalize() ->
     test_frame_annual
 
 # Do we need to normalize before attaching the df?
 # The global temperature gets repeated a bunch before normalizing it.
-test_frame_monthly <- temp_df_monthly %>% filter(grid_cell<50) %>% std_normalize() .
+test_frame_monthly <- temp_df_monthly %>% filter(grid_cell<50) %>% std_normalize()
 test_frame_january <- test_frame_monthly %>% label_month() %>% filter(month == 1) %>% select(-month)
 
-a_temp_fit <- map(
+a_temp_fit <- map2stan(
     alist(
-        cell_value ~ dnorm(mu, sigma),
+        cell_value ~ dnorm(mu, sig),
         mu <- a[grid_cell] + b[grid_cell]*global_value,
-        a[grid_cell] ~ dnorm(0, 5),
-        b[grid_cell] ~ dnorm(0, 5),
-        sigma ~ dnorm(0,10)#This parameter seems to be causing the failure.
+        sig <- sigma[grid_cell],
+        a ~ dnorm(0, 5),
+        b ~ dnorm(0, 5),
+        sigma ~ dcauchy(0,5)#This parameter seems to be causing the failure.
         # As we add more grid cells the slopes become smaller until they are pushed to 0
     ),
-data=test_frame_annual)
+    data=test_frame_annual,
+    start = list(a=rep(0, ncell), b=rep(1, ncell), sigma=rep(1,ncell)),
+    cores=4, chains=4, iter = 2500,   # These parameters are only valid for map2stan
+    debug = TRUE)
 
 annual_temp_fit <- precis(a_temp_fit, depth = 2)
 
