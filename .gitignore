@@ -26,3 +26,13 @@ vignettes/*.pdf
 # Shiny token, see https://shiny.rstudio.com/articles/shinyapps.html
 rsconnect/
 .Rproj.user
+
+## Large data files
+*.nc
+
+## Mac cruft
+.DS_Store
+
+## Emacs backup files
+*~
+
