@@ -8,25 +8,30 @@ library(alps)
 tempo_aggregated_tas <- read.general("data/tas_Amon_MIROC5_tempo_avg.nc", varname = "tas")
 geo_tempo_aggregated_tas <- read.geo.aggregate("data/tas_Amon_MIROC5_geo_tempo_avg.nc", varname = "tas")
 
-
-temp_df_annual <- bind_geo.ave_grid(geo_tempo_aggregated_tas, tempo_aggregated_tas)
+#Format the griddata into a table and bind global temperatures to downscaled data
+long_tempo_aggregated_tas <- gather_griddata(tempo_aggregated_tas)
+long_tempo_aggregated_tas %>%
+    mutate(global_value = geo_tempo_aggregated_tas$vardata %>%
+               rep(length(unique(long_tempo_aggregated_tas$grid_cell)))) %>%
+    rename(cell_value = value) ->
+    temp_df_annual
 
 #time how long running the model takes
 #======================================================================================
 
-first_cell <- 64 #must between 1 and 128
-parallel_grid_cells <- (seq(0,255)*128)+first_cell
+#Select which parallel band of cells to look at
+parallel <-  0.7003838
 
 temp_df_annual %>%
-    filter(grid_cell %in% parallel_grid_cells) %>%
+    filter(between(lat, parallel-.1, parallel+.1)) %>%
     std_normalize() ->
     parallel_temp_df_annual
 
-time_linear_fitting <- function(batch_size, parallel_temp_df_annual){
-    #Get a df of gridcells at the same lat
-    parallel_temp_df_annual_batch_n <- filter(parallel_temp_df_annual, grid_cell %in% parallel_grid_cells[1:batch_size]) %>% mutate(grid_cell = as.factor(grid_cell))
-    factor_grid_cell_mapping <- levels(parallel_temp_df_annual_batch_n$grid_cell)
-    parallel_temp_df_annual_batch_n <- mutate(parallel_temp_df_annual_batch_n, grid_cell = as.integer(grid_cell))
+time_linear_fitting <- function(parallel_temp_df_annual, batch_size){
+    grid_cells <- parallel_temp_df_annual$grid_cell %>%as.factor() %>% unique
+    parallel_temp_df_annual_batch_n <- filter(parallel_temp_df_annual, grid_cell %in% grid_cells[1:batch_size]) %>% mutate(grid_cell = as.integer(as.factor(grid_cell)))
+
+    assertthat::assert_that(batch_size<= length(grid_cells))
 
     time_fit <- system.time(
         a_temp_fit <- map2stan(
@@ -46,15 +51,15 @@ time_linear_fitting <- function(batch_size, parallel_temp_df_annual){
 
     rethinking::precis(a_temp_fit, depth = 2)@output %>%
         tibble::rownames_to_column("parameter") %>%
-        mutate(n = batch_size, time = time_fit[[3]], grid_cell = rep(parallel_grid_cells[1:batch_size], 3)) ->
+        mutate(n = batch_size, time = time_fit[[3]], grid_cell = rep(as.integer(levels(grid_cells))[1:batch_size], 3)) ->
         annual_temp_fit_batch_n
     return(annual_temp_fit_batch_n)
 }
-time_linear_fitting_strict <- function(batch_size, parallel_temp_df_annual){
-    #Get a df of gridcells at the same lat
-    parallel_temp_df_annual_batch_n <- filter(parallel_temp_df_annual, grid_cell %in% parallel_grid_cells[1:batch_size]) %>% mutate(grid_cell = as.factor(grid_cell))
-    factor_grid_cell_mapping <- levels(parallel_temp_df_annual_batch_n$grid_cell)
-    parallel_temp_df_annual_batch_n <- mutate(parallel_temp_df_annual_batch_n, grid_cell = as.integer(grid_cell))
+time_linear_fitting_strict <- function(parallel_temp_df_annual, batch_size){
+    grid_cells <- parallel_temp_df_annual$grid_cell %>%as.factor() %>% unique
+    parallel_temp_df_annual_batch_n <- filter(parallel_temp_df_annual, grid_cell %in% grid_cells[1:batch_size]) %>% mutate(grid_cell = as.integer(as.factor(grid_cell)))
+
+    assertthat::assert_that(batch_size<= length(grid_cells))
 
     time_fit <- system.time(
         a_temp_fit <- map2stan(
@@ -74,15 +79,15 @@ time_linear_fitting_strict <- function(batch_size, parallel_temp_df_annual){
 
     rethinking::precis(a_temp_fit, depth = 2)@output %>%
         tibble::rownames_to_column("parameter") %>%
-        mutate(n = batch_size, time = time_fit[[3]], grid_cell = rep(parallel_grid_cells[1:batch_size], 3)) ->
+        mutate(n = batch_size, time = time_fit[[3]], grid_cell = rep(as.integer(levels(grid_cells))[1:batch_size], 3)) ->
         annual_temp_fit_batch_n
     return(annual_temp_fit_batch_n)
 }
 time_linear_fitting_mid <- function(batch_size, parallel_temp_df_annual){
-    #Get a df of gridcells at the same lat
-    parallel_temp_df_annual_batch_n <- filter(parallel_temp_df_annual, grid_cell %in% parallel_grid_cells[1:batch_size]) %>% mutate(grid_cell = as.factor(grid_cell))
-    factor_grid_cell_mapping <- levels(parallel_temp_df_annual_batch_n$grid_cell)
-    parallel_temp_df_annual_batch_n <- mutate(parallel_temp_df_annual_batch_n, grid_cell = as.integer(grid_cell))
+    grid_cells <- parallel_temp_df_annual$grid_cell %>%as.factor() %>% unique
+    parallel_temp_df_annual_batch_n <- filter(parallel_temp_df_annual, grid_cell %in% grid_cells[1:batch_size]) %>% mutate(grid_cell = as.integer(as.factor(grid_cell)))
+
+    assertthat::assert_that(batch_size<= length(grid_cells))
 
     time_fit <- system.time(
         a_temp_fit <- map2stan(
@@ -102,7 +107,7 @@ time_linear_fitting_mid <- function(batch_size, parallel_temp_df_annual){
 
     rethinking::precis(a_temp_fit, depth = 2)@output %>%
         tibble::rownames_to_column("parameter") %>%
-        mutate(n = batch_size, time = time_fit[[3]], grid_cell = rep(parallel_grid_cells[1:batch_size], 3)) ->
+        mutate(n = batch_size, time = time_fit[[3]], grid_cell = rep(as.integer(levels(grid_cells))[1:batch_size], 3)) ->
         annual_temp_fit_batch_n
     return(annual_temp_fit_batch_n)
 }
@@ -116,7 +121,7 @@ size_time_fit <- tibble(parameter = character(), Mean = numeric(),
                         `upper 0.89`=numeric(), n_eff=numeric(), Rhat=numeric(),
                         n = numeric(), time = numeric(), grid_cell = numeric())
 for(i in 1:length(batch_size_list)){
-    size_time_fit_holder <- time_linear_fitting(batch_size_list[[i]], parallel_temp_df_annual)
+    size_time_fit_holder <- time_linear_fitting(parallel_temp_df_annual, batch_size_list[[i]])
     size_time_fit <- bind_rows(size_time_fit, size_time_fit_holder)
 }
 #===================================================================================
@@ -128,7 +133,7 @@ size_time_fit_strict <- tibble(parameter = character(), Mean = numeric(),
                                `upper 0.89`=numeric(), n_eff=numeric(), Rhat=numeric(),
                                n = numeric(), time = numeric(), grid_cell = numeric())
 for(i in 1:length(batch_size_list)){
-    size_time_fit_strict_holder <- time_linear_fitting_strict(batch_size_list[[i]], parallel_temp_df_annual)
+    size_time_fit_strict_holder <- time_linear_fitting_strict(parallel_temp_df_annual, batch_size_list[[i]])
     size_time_fit_strict <- bind_rows(size_time_fit_strict, size_time_fit_strict_holder)
 }
 #===================================================================================
@@ -140,7 +145,7 @@ size_time_fit_mid <- tibble(parameter = character(), Mean = numeric(),
                             `upper 0.89`=numeric(), n_eff=numeric(), Rhat=numeric(),
                             n = numeric(), time = numeric(), grid_cell = numeric())
 for(i in 1:length(batch_size_list)){
-    size_time_fit_mid_holder <- time_linear_fitting_mid(batch_size_list[[i]], parallel_temp_df_annual)
+    size_time_fit_mid_holder <- time_linear_fitting_mid(parallel_temp_df_annual, batch_size_list[[i]])
     size_time_fit_mid <- bind_rows(size_time_fit_strict, size_time_fit_mid_holder)
 }
 #===================================================================================
@@ -188,7 +193,17 @@ ggplot(batch_efficiency_strict, aes(n, time_per_run)) +
     theme(text = element_text(size=20)) ->
     strict_batch_efficiency_plot
 
+ggplot(batch_efficiency_mid, aes(n, time_per_run)) +
+    geom_point(size=3) +
+    ylab("Run Time per Batch Unit (s)") +
+    xlab("Batch Size") +
+    ylim(10, 40) +
+    ggtitle("Stricter Batch Efficiency") +
+    theme(text = element_text(size=20)) ->
+    mid_batch_efficiency_plot
+
 ggsave("analysis/figures/batch_efficiency.png", plot = baseline_batch_efficiency_plot,  dpi=600/2, width=6000/300, height=3000/300)
 ggsave("analysis/figures/batch_efficiency_strict.png",  plot = strict_batch_efficiency_plot, dpi=600/2, width=6000/300, height=3000/300)
+ggsave("analysis/figures/batch_efficiency_mid.png",  plot = mid_batch_efficiency_plot, dpi=600/2, width=6000/300, height=3000/300)
 
 #===================================================================================

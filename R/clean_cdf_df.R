@@ -22,22 +22,20 @@
 #' @param gridded_data The globally gridded data
 #' @return A long form \code{data.frame}.
 #' @importFrom assertthat assert_that
-#' @importFrom dplyr mutate %>%
+#' @importFrom dplyr bind_cols mutate select %>%
+#' @importFrom tidyr gather
 #' @export
 #'
 
+gather_griddata <- function(griddata){
+    assertthat::assert_that(class(griddata) == "griddata")
 
-#NOTE: I'm not sure why the dplyr pipes work. I assume it's because I have it in the environment from
-# the run_r_proj.R script. I'll need to look up how to get pipes in the package without calling dplyr.
-
-bind_geo.ave_grid <- function(geo.ave_data, gridded_data){
-    assertthat::assert_that(all((class(geo.ave_data) == "griddata"), class(gridded_data) == "griddata"))
-    assertthat::assert_that(nrow(geo.ave_data$vardata) == nrow(gridded_data$vardata))
-
-    data.frame(global_value = geo.ave_data$vardata) %>%
-        bind_cols(data.frame(gridded_data$vardata)) %>%
-        gather(grid_cell,cell_value, -global_value) %>%
-        mutate(grid_cell = as.integer(gsub("X","",grid_cell))) %>%
+    griddata$vardata %>%
+        data.frame() %>%
+        tidyr::gather(grid_cell, value) %>%
+        dplyr::mutate(grid_cell = as.integer(gsub("X", "", grid_cell)),
+                      lat = rep(griddata$lat, length(griddata$lon), each = length(griddata$time)),
+                      lon = rep(griddata$lon, each = length(griddata$lat)*length(griddata$time)))%>%
         return()
 }
 
